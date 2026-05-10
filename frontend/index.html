@@ -1,0 +1,369 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>IRAD Budget & Asset Tracker</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg: #0f1117; --surface: #1a1d27; --surface2: #22263a;
+      --border: #2e3248; --accent: #4f8ef7; --danger: #e05a5a;
+      --success: #4caf7d; --warn: #e8a838; --text: #e8eaf0;
+      --muted: #7a7f99; --radius: 10px;
+    }
+    body { background: var(--bg); color: var(--text); font-family: 'Segoe UI', system-ui, sans-serif; font-size: 14px; }
+    header { background: var(--surface); border-bottom: 1px solid var(--border); padding: 0 32px; display: flex; align-items: center; justify-content: space-between; height: 58px; }
+    header h1 { font-size: 16px; font-weight: 600; }
+    header span { color: var(--muted); font-size: 12px; }
+    nav { display: flex; gap: 4px; padding: 16px 32px 0; }
+    nav button { background: none; border: none; color: var(--muted); cursor: pointer; padding: 8px 16px; border-radius: var(--radius); font-size: 13px; transition: all .15s; }
+    nav button.active, nav button:hover { background: var(--surface); color: var(--text); }
+    main { padding: 24px 32px; max-width: 1100px; }
+    .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 14px; margin-bottom: 28px; }
+    .stat-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 18px 20px; }
+    .stat-card .label { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .8px; }
+    .stat-card .value { font-size: 26px; font-weight: 700; margin-top: 6px; }
+    .stat-card .sub { font-size: 11px; color: var(--muted); margin-top: 2px; }
+    .stat-card.danger .value { color: var(--danger); }
+    .stat-card.success .value { color: var(--success); }
+    .stat-card.warn .value { color: var(--warn); }
+    .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; margin-bottom: 24px; }
+    .card-header { display: flex; justify-content: space-between; align-items: center; padding: 16px 20px; border-bottom: 1px solid var(--border); }
+    .card-header h2 { font-size: 14px; font-weight: 600; }
+    table { width: 100%; border-collapse: collapse; }
+    th { text-align: left; padding: 10px 20px; font-size: 11px; text-transform: uppercase; letter-spacing: .7px; color: var(--muted); border-bottom: 1px solid var(--border); }
+    td { padding: 12px 20px; border-bottom: 1px solid var(--border); }
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background: var(--surface2); }
+    .badge { display: inline-block; padding: 2px 10px; border-radius: 99px; font-size: 11px; font-weight: 600; }
+    .badge.active    { background: #1a3a2a; color: var(--success); }
+    .badge.completed { background: #1a2a3a; color: var(--accent); }
+    .badge.on_hold   { background: #2a2a1a; color: var(--warn); }
+    .badge.danger    { background: #3a1a1a; color: var(--danger); }
+    .badge.ok        { background: #1a3a2a; color: var(--success); }
+    .badge.available { background: #1a3a2a; color: var(--success); }
+    .badge.assigned  { background: #1a2a3a; color: var(--accent); }
+    .badge.maintenance { background: #2a2a1a; color: var(--warn); }
+    .badge.retired   { background: #2a1a1a; color: var(--muted); }
+    .progress-bar { background: var(--surface2); border-radius: 99px; height: 6px; width: 120px; overflow: hidden; }
+    .progress-fill { height: 100%; border-radius: 99px; transition: width .3s; }
+    .btn { padding: 7px 14px; border-radius: 6px; border: none; cursor: pointer; font-size: 12px; font-weight: 600; transition: opacity .15s; }
+    .btn:hover { opacity: .85; }
+    .btn-primary { background: var(--accent); color: #fff; }
+    .btn-danger  { background: var(--danger); color: #fff; }
+    .btn-ghost   { background: var(--surface2); color: var(--text); border: 1px solid var(--border); }
+    .btn-sm      { padding: 4px 10px; font-size: 11px; }
+    .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.6); z-index: 100; align-items: center; justify-content: center; }
+    .modal-overlay.open { display: flex; }
+    .modal { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 28px; width: 420px; max-width: 95vw; }
+    .modal h3 { font-size: 15px; margin-bottom: 20px; }
+    .field { margin-bottom: 14px; }
+    .field label { display: block; font-size: 11px; color: var(--muted); margin-bottom: 5px; text-transform: uppercase; }
+    .field input, .field select { width: 100%; background: var(--surface2); border: 1px solid var(--border); color: var(--text); border-radius: 6px; padding: 8px 12px; font-size: 13px; }
+    .field input:focus, .field select:focus { outline: none; border-color: var(--accent); }
+    .modal-actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px; }
+    .tab-section { display: none; }
+    .tab-section.active { display: block; }
+    .export-row { display: flex; gap: 10px; }
+    .empty { text-align: center; padding: 40px; color: var(--muted); }
+  </style>
+</head>
+<body>
+<header>
+  <h1>⬡ IRAD Budget & Asset Tracker</h1>
+  <span id="last-updated">Loading...</span>
+</header>
+<nav>
+  <button class="active" onclick="showTab('dashboard', event)">Dashboard</button>
+  <button onclick="showTab('projects', event)">Projects</button>
+  <button onclick="showTab('assets', event)">Assets</button>
+  <button onclick="showTab('reports', event)">Reports</button>
+</nav>
+<main>
+  <section id="tab-dashboard" class="tab-section active">
+    <div class="stats">
+      <div class="stat-card"><div class="label">Total Budget</div><div class="value" id="s-budget">—</div></div>
+      <div class="stat-card warn"><div class="label">Total Spent</div><div class="value" id="s-spent">—</div></div>
+      <div class="stat-card success"><div class="label">Remaining</div><div class="value" id="s-remaining">—</div></div>
+      <div class="stat-card"><div class="label">Utilization</div><div class="value" id="s-util">—</div><div class="sub">of budget used</div></div>
+      <div class="stat-card danger"><div class="label">Over Budget</div><div class="value" id="s-overbudget">—</div><div class="sub">projects</div></div>
+      <div class="stat-card"><div class="label">Total Assets</div><div class="value" id="s-assets">—</div><div class="sub" id="s-asset-val">value: —</div></div>
+    </div>
+    <div class="card">
+      <div class="card-header"><h2>Projects Overview</h2></div>
+      <table>
+        <thead><tr><th>Project</th><th>Dept</th><th>Budget</th><th>Spent</th><th>Progress</th><th>Status</th></tr></thead>
+        <tbody id="dash-projects"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <section id="tab-projects" class="tab-section">
+    <div class="card">
+      <div class="card-header"><h2>All Projects</h2><button class="btn btn-primary" onclick="openModal('project')">+ New Project</button></div>
+      <table>
+        <thead><tr><th>Name</th><th>Department</th><th>Budget</th><th>Spent</th><th>Status</th><th>Actions</th></tr></thead>
+        <tbody id="projects-table"></tbody>
+      </table>
+    </div>
+    <div id="budget-items-section" style="display:none">
+      <div class="card">
+        <div class="card-header"><h2 id="budget-items-title">Budget Items</h2><button class="btn btn-primary" onclick="openModal('budget')">+ Add Item</button></div>
+        <table>
+          <thead><tr><th>Category</th><th>Allocated</th><th>Spent</th><th>Remaining</th><th>Status</th><th>Actions</th></tr></thead>
+          <tbody id="budget-items-table"></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <section id="tab-assets" class="tab-section">
+    <div class="card">
+      <div class="card-header"><h2>Equipment & Assets</h2><button class="btn btn-primary" onclick="openModal('asset')">+ New Asset</button></div>
+      <table>
+        <thead><tr><th>Name</th><th>Type</th><th>Assigned To</th><th>Project</th><th>Value</th><th>Status</th><th>Actions</th></tr></thead>
+        <tbody id="assets-table"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <section id="tab-reports" class="tab-section">
+    <div class="card">
+      <div class="card-header"><h2>Export Reports</h2></div>
+      <div style="padding:24px;">
+        <p style="color:var(--muted);margin-bottom:20px;">Download current data as CSV for further analysis or archiving.</p>
+        <div class="export-row">
+          <a href="/reports/export/budget" class="btn btn-primary">⬇ Budget Report (CSV)</a>
+          <a href="/reports/export/assets" class="btn btn-ghost">⬇ Assets Report (CSV)</a>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-header"><h2>Division Summary</h2></div>
+      <div style="padding:20px;" id="summary-table"></div>
+    </div>
+  </section>
+</main>
+
+<div class="modal-overlay" id="modal-overlay" onclick="closeModal(event)">
+  <div class="modal" onclick="event.stopPropagation()">
+    <h3 id="modal-title">New Project</h3>
+    <div id="modal-body"></div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="submitModal()">Save</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const API = '';
+let currentModal = null;
+let selectedProjectId = null;
+let projects = [];
+
+async function api(method, path, body) {
+  const res = await fetch(API + path, {
+    method,
+    headers: { 'Content-Type': 'application/json' },
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  if (res.status === 204) return null;
+  return res.json();
+}
+
+const fmt = n => '$' + Number(n).toLocaleString('en-US', {minimumFractionDigits: 0});
+
+function showTab(name, event) {
+  document.querySelectorAll('.tab-section').forEach(s => s.classList.remove('active'));
+  document.querySelectorAll('nav button').forEach(b => b.classList.remove('active'));
+  document.getElementById('tab-' + name).classList.add('active');
+  event.target.classList.add('active');
+  if (name === 'dashboard') loadDashboard();
+  if (name === 'projects') loadProjects();
+  if (name === 'assets') loadAssets();
+  if (name === 'reports') loadSummary();
+}
+
+async function loadDashboard() {
+  const [summary, projs] = await Promise.all([api('GET', '/reports/summary'), api('GET', '/projects/')]);
+  document.getElementById('s-budget').textContent = fmt(summary.total_budget);
+  document.getElementById('s-spent').textContent = fmt(summary.total_spent);
+  document.getElementById('s-remaining').textContent = fmt(summary.total_remaining);
+  document.getElementById('s-util').textContent = summary.budget_utilization_pct + '%';
+  document.getElementById('s-overbudget').textContent = summary.over_budget_projects;
+  document.getElementById('s-assets').textContent = summary.total_assets;
+  document.getElementById('s-asset-val').textContent = 'value: ' + fmt(summary.asset_total_value);
+  document.getElementById('last-updated').textContent = 'Updated ' + new Date().toLocaleTimeString();
+  const tbody = document.getElementById('dash-projects');
+  tbody.innerHTML = projs.length ? projs.map(p => {
+    const pct = p.total_budget > 0 ? Math.min((p.total_spent / p.total_budget) * 100, 100) : 0;
+    const color = p.over_budget ? 'var(--danger)' : pct > 80 ? 'var(--warn)' : 'var(--success)';
+    return `<tr>
+      <td><strong>${p.name}</strong></td>
+      <td style="color:var(--muted)">${p.department}</td>
+      <td>${fmt(p.total_budget)}</td>
+      <td>${fmt(p.total_spent)}</td>
+      <td><div class="progress-bar"><div class="progress-fill" style="width:${pct}%;background:${color}"></div></div><span style="font-size:11px;color:var(--muted)">${pct.toFixed(0)}%</span></td>
+      <td><span class="badge ${p.status}">${p.status}</span></td>
+    </tr>`;
+  }).join('') : '<tr><td colspan="6" class="empty">No projects yet.</td></tr>';
+}
+
+async function loadProjects() {
+  projects = await api('GET', '/projects/');
+  const tbody = document.getElementById('projects-table');
+  tbody.innerHTML = projects.length ? projects.map(p => `<tr>
+    <td><strong>${p.name}</strong></td>
+    <td>${p.department}</td>
+    <td>${fmt(p.total_budget)}</td>
+    <td style="color:${p.over_budget ? 'var(--danger)' : 'inherit'}">${fmt(p.total_spent)} ${p.over_budget ? '⚠' : ''}</td>
+    <td><span class="badge ${p.status}">${p.status}</span></td>
+    <td>
+      <button class="btn btn-ghost btn-sm" onclick="viewBudget(${p.id}, '${p.name}')">Budget</button>
+      <button class="btn btn-danger btn-sm" onclick="deleteProject(${p.id})">Del</button>
+    </td>
+  </tr>`).join('') : '<tr><td colspan="6" class="empty">No projects yet. Add one!</td></tr>';
+}
+
+async function viewBudget(projectId, name) {
+  selectedProjectId = projectId;
+  document.getElementById('budget-items-title').textContent = `Budget Items — ${name}`;
+  document.getElementById('budget-items-section').style.display = 'block';
+  const items = await api('GET', `/projects/${projectId}/budget`);
+  const tbody = document.getElementById('budget-items-table');
+  tbody.innerHTML = items.length ? items.map(i => {
+    const remaining = i.allocated - i.spent;
+    return `<tr>
+      <td>${i.category}</td>
+      <td>${fmt(i.allocated)}</td>
+      <td style="color:${i.over_budget?'var(--danger)':'inherit'}">${fmt(i.spent)}</td>
+      <td style="color:${remaining<0?'var(--danger)':'var(--success)'}">${fmt(remaining)}</td>
+      <td><span class="badge ${i.over_budget ? 'danger' : 'ok'}">${i.over_budget ? 'OVER' : 'OK'}</span></td>
+      <td><button class="btn btn-danger btn-sm" onclick="deleteBudgetItem(${i.id})">Del</button></td>
+    </tr>`;
+  }).join('') : '<tr><td colspan="6" class="empty">No budget items yet.</td></tr>';
+}
+
+async function deleteProject(id) {
+  if (!confirm('Delete this project?')) return;
+  await api('DELETE', `/projects/${id}`);
+  loadProjects();
+}
+
+async function deleteBudgetItem(id) {
+  if (!confirm('Delete this item?')) return;
+  await api('DELETE', `/projects/${selectedProjectId}/budget/${id}`);
+  viewBudget(selectedProjectId, document.getElementById('budget-items-title').textContent.split('—')[1].trim());
+}
+
+async function loadAssets() {
+  projects = await api('GET', '/projects/');
+  const assets = await api('GET', '/assets/');
+  const tbody = document.getElementById('assets-table');
+  tbody.innerHTML = assets.length ? assets.map(a => {
+    const proj = projects.find(p => p.id === a.project_id);
+    return `<tr>
+      <td><strong>${a.name}</strong></td>
+      <td>${a.asset_type}</td>
+      <td>${a.assigned_to || '<span style="color:var(--muted)">—</span>'}</td>
+      <td>${proj ? proj.name : '<span style="color:var(--muted)">—</span>'}</td>
+      <td>${fmt(a.value)}</td>
+      <td><span class="badge ${a.status}">${a.status}</span></td>
+      <td><button class="btn btn-danger btn-sm" onclick="deleteAsset(${a.id})">Del</button></td>
+    </tr>`;
+  }).join('') : '<tr><td colspan="7" class="empty">No assets yet. Add one!</td></tr>';
+}
+
+async function deleteAsset(id) {
+  if (!confirm('Delete this asset?')) return;
+  await api('DELETE', `/assets/${id}`);
+  loadAssets();
+}
+
+async function loadSummary() {
+  const s = await api('GET', '/reports/summary');
+  document.getElementById('summary-table').innerHTML = `
+    <table style="width:100%">
+      <tr><td style="color:var(--muted);padding:8px 0">Total Projects</td><td>${s.total_projects}</td></tr>
+      <tr><td style="color:var(--muted);padding:8px 0">Total Budget</td><td>${fmt(s.total_budget)}</td></tr>
+      <tr><td style="color:var(--muted);padding:8px 0">Total Spent</td><td>${fmt(s.total_spent)}</td></tr>
+      <tr><td style="color:var(--muted);padding:8px 0">Remaining</td><td>${fmt(s.total_remaining)}</td></tr>
+      <tr><td style="color:var(--muted);padding:8px 0">Utilization</td><td>${s.budget_utilization_pct}%</td></tr>
+      <tr><td style="color:var(--muted);padding:8px 0">Over-Budget Projects</td><td style="color:${s.over_budget_projects > 0 ? 'var(--danger)' : 'inherit'}">${s.over_budget_projects}</td></tr>
+      <tr><td style="color:var(--muted);padding:8px 0">Total Assets</td><td>${s.total_assets}</td></tr>
+      <tr><td style="color:var(--muted);padding:8px 0">Asset Portfolio Value</td><td>${fmt(s.asset_total_value)}</td></tr>
+    </table>`;
+}
+
+function openModal(type) {
+  currentModal = type;
+  const titles = { project: 'New Project', budget: 'Add Budget Item', asset: 'New Asset' };
+  document.getElementById('modal-title').textContent = titles[type];
+  const projectOptions = projects.map(p => `<option value="${p.id}">${p.name}</option>`).join('');
+  const bodies = {
+    project: `
+      <div class="field"><label>Project Name</label><input id="f-name" placeholder="e.g. IRAD Phase 2"/></div>
+      <div class="field"><label>Department</label><input id="f-dept" placeholder="e.g. Engineering"/></div>
+      <div class="field"><label>Total Budget ($)</label><input id="f-budget" type="number" placeholder="100000"/></div>
+      <div class="field"><label>Status</label><select id="f-status"><option value="active">Active</option><option value="on_hold">On Hold</option><option value="completed">Completed</option></select></div>`,
+    budget: `
+      <div class="field"><label>Category</label><input id="f-category" placeholder="e.g. Personnel"/></div>
+      <div class="field"><label>Allocated ($)</label><input id="f-alloc" type="number" placeholder="50000"/></div>
+      <div class="field"><label>Spent ($)</label><input id="f-spent" type="number" placeholder="0"/></div>`,
+    asset: `
+      <div class="field"><label>Asset Name</label><input id="f-name" placeholder="e.g. Dell Workstation"/></div>
+      <div class="field"><label>Type</label><input id="f-type" placeholder="e.g. Hardware"/></div>
+      <div class="field"><label>Value ($)</label><input id="f-val" type="number" placeholder="2500"/></div>
+      <div class="field"><label>Assigned To</label><input id="f-assigned" placeholder="e.g. Jane Doe"/></div>
+      <div class="field"><label>Project</label><select id="f-project"><option value="">— None —</option>${projectOptions}</select></div>
+      <div class="field"><label>Status</label><select id="f-astatus"><option value="available">Available</option><option value="assigned">Assigned</option><option value="maintenance">Maintenance</option><option value="retired">Retired</option></select></div>`,
+  };
+  document.getElementById('modal-body').innerHTML = bodies[type];
+  document.getElementById('modal-overlay').classList.add('open');
+}
+
+function closeModal(e) {
+  if (e && e.target !== document.getElementById('modal-overlay')) return;
+  document.getElementById('modal-overlay').classList.remove('open');
+  currentModal = null;
+}
+
+async function submitModal() {
+  if (currentModal === 'project') {
+    await api('POST', '/projects/', {
+      name: document.getElementById('f-name').value,
+      department: document.getElementById('f-dept').value,
+      total_budget: parseFloat(document.getElementById('f-budget').value),
+      status: document.getElementById('f-status').value,
+    });
+    closeModal();
+    loadProjects();
+  } else if (currentModal === 'budget') {
+    await api('POST', `/projects/${selectedProjectId}/budget`, {
+      category: document.getElementById('f-category').value,
+      allocated: parseFloat(document.getElementById('f-alloc').value),
+      spent: parseFloat(document.getElementById('f-spent').value) || 0,
+    });
+    closeModal();
+    viewBudget(selectedProjectId, document.getElementById('budget-items-title').textContent.split('—')[1].trim());
+  } else if (currentModal === 'asset') {
+    const projId = document.getElementById('f-project').value;
+    await api('POST', '/assets/', {
+      name: document.getElementById('f-name').value,
+      asset_type: document.getElementById('f-type').value,
+      value: parseFloat(document.getElementById('f-val').value),
+      assigned_to: document.getElementById('f-assigned').value || null,
+      project_id: projId ? parseInt(projId) : null,
+      status: document.getElementById('f-astatus').value,
+    });
+    closeModal();
+    loadAssets();
+  }
+}
+
+loadDashboard();
+</script>
+</body>
+</html>
